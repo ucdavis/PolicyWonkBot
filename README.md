@@ -1,6 +1,6 @@
-# 📘 PolicyWonk: UCOP Policy Expert in Your Pocket!
+# 📘 PolicyWonk: UCD Policy Expert in Your Pocket!
 
-Welcome to **PolicyWonk**, your go-to Slack app for navigating the complex maze of UCOP (University of California Office of the President) and UC Davis policies! 🌟 Whether you're a student, faculty, staff, or administrator, understanding and complying with UCOP policies is now easier than ever.
+Welcome to **PolicyWonk**, your go-to Slack app for navigating the complex maze of UCOP (University of California Office of the President) and UC Davis policies! 🌟 Whether you're a student, faculty, staff, or administrator, understanding and complying with university policies is now easier than ever.
 
 ## How Can PolicyWonk Assist You?
 - **Immediate Answers**: Got a policy question? Just ask, and PolicyWonk provides you with clear, concise answers, pronto! ✏️
@@ -9,7 +9,7 @@ Welcome to **PolicyWonk**, your go-to Slack app for navigating the complex maze 
 
 ## Features:
 - **Direct Access to Policy Information**: Receive links to specific policies, guidelines, and procedures directly in your Slack workspace for easy reference.
-- **Customizable Help**: PolicyWonk is here to provide tailored advice, whether you have a quick question or need detailed guidance on UCOP policies.
+- **Customizable Help**: PolicyWonk is here to provide tailored advice, whether you have a quick question or need detailed guidance on university policies.
 
 ## How to Get Started?
 To interact with PolicyWonk, use the `/policy` command followed by your question. For example: `/policy What are the official holidays?`
@@ -22,4 +22,4 @@ Alternatively, you can also @mention PolicyWonk in your message to get a quick r
 
 ---
 
-**Embark on a hassle-free journey through UCOP policies with PolicyWonk on your Slack team!** 📘🚀
+**Embark on a hassle-free journey through university policies with PolicyWonk on your Slack team!** 📘🚀
