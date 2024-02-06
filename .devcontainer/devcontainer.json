@@ -1,0 +1,15 @@
+{
+  "name": "Node.js with Docker Compose",
+  "dockerComposeFile": "docker-compose.yml",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "service": "app",
+"customizations": {
+    "vscode": {
+        "settings": {
+            "terminal.integrated.shell.linux": "/bin/bash"
+        }
+    }
+},
+"forwardPorts": [8000, 9200, 9300],
+  "postCreateCommand": "npm install"
+}
