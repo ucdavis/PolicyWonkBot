@@ -1,71 +1,70 @@
-import { Client, ClientOptions } from '@elastic/elasticsearch';
+import { Client, ClientOptions } from "@elastic/elasticsearch";
 import {
   ElasticClientArgs,
   ElasticVectorSearch,
-} from 'langchain/vectorstores/elasticsearch';
-import { OpenAIEmbeddings } from 'langchain/embeddings/openai';
-import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
-import { Document } from 'langchain/document';
-import ExcelJS from 'exceljs';
-import { compile } from 'html-to-text';
+} from "langchain/vectorstores/elasticsearch";
+import { OpenAIEmbeddings } from "langchain/embeddings/openai";
+import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
+import { Document } from "langchain/document";
+import dotenv from "dotenv";
+import path from "path";
+import * as fs from "fs";
 
-const compiledConvert = compile(); // options could be passed here
+dotenv.config(); // load up .env file
 
 // let's try to do full RAG with OpenAI assistants & ElasticSearch
 const apiKey = process.env.OPENAI_API_KEY; // Replace with your API key or use environment variable
 if (!apiKey) {
-  console.error('OpenAI API key is required');
+  console.error("OpenAI API key is required");
   process.exit(1);
 }
 
 // embeddings
 const embeddings = new OpenAIEmbeddings();
 
-// get my vector store
-// const config: ClientOptions = {
-//   node: process.env.ELASTIC_URL ?? 'http://127.0.0.1:9200',
-// };
-
 const config: ClientOptions = {
-  node: process.env.ELASTIC_URL ?? 'http://127.0.0.1:9200',
+  node: process.env.ELASTIC_URL ?? "http://127.0.0.1:9200",
   auth: {
-    username: process.env.ELASTIC_WRITE_USERNAME ?? 'elastic',
-    password: process.env.ELASTIC_WRITE_PASSWORD ?? 'changeme',
+    username: process.env.ELASTIC_WRITE_USERNAME ?? "",
+    password: process.env.ELASTIC_WRITE_PASSWORD ?? "",
   },
 };
 
 const clientArgs: ElasticClientArgs = {
   client: new Client(config),
-  indexName: process.env.ELASTIC_INDEX ?? 'kb_vectorstore',
+  indexName: process.env.ELASTIC_INDEX ?? "vectorstore",
   vectorSearchOptions: {
-    similarity: 'cosine', // since this is what openAI uses
+    similarity: "cosine", // since this is what openAI uses
   },
 };
-
-// const vectorStore = new ElasticVectorSearch(embeddings, clientArgs);
-const processIntoDocuments = async (documents: KbDocument[]) => {
+const processIntoDocuments = async (documents: PolicyDocument[]) => {
   const processedDocuments = documents.map((document) => {
-    const text = compiledConvert(document.htmlContent);
+    const text = document.content ?? "";
 
-    // append the title to the top of the text since it might be helpful in searching
-    const textWithTitle = `${document.title} ${text}`;
+    // TODO: I think the title is always in the text but let's check
 
     return new Document({
-      pageContent: textWithTitle,
-      metadata: { id: document.id, title: document.title },
+      pageContent: text,
+      metadata: {
+        scope: "ucop",
+        section: "ucop",
+        title: document.title,
+        url: document.url,
+        responsible_office: document.responsible_office,
+        subject_areas: document.subject_areas,
+        effective_date: document.effective_date,
+        issuance_date: document.issuance_date,
+      },
     });
   });
 
-  //   console.log('textOnly', textOnly, metadata);
-
   // split the documents into chunks
   // TODO: play with chunk size & overlap
-  // TODO: this doesn't work too well with content in tables
   const textSplitter = new RecursiveCharacterTextSplitter();
 
   const splitDocs = await textSplitter.splitDocuments(processedDocuments);
 
-  console.log('storing in elastic split docs: ', splitDocs.length);
+  console.log("storing in elastic split docs: ", splitDocs.length);
 
   // batch the splitDocs into 200 at a time
   const batchedSplitDocs = [];
@@ -76,63 +75,60 @@ const processIntoDocuments = async (documents: KbDocument[]) => {
 
   // store the docs in batches
   for (const batch of batchedSplitDocs) {
-    console.log('storing batch size: ', batch.length);
+    console.log("storing batch size: ", batch.length);
     await ElasticVectorSearch.fromDocuments(batch, embeddings, clientArgs);
   }
 
-  console.log('storage complete');
+  console.log("storage complete");
 };
 
-// get back the rows from the excel file
-const processExcel = async (path: string) => {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.readFile(path);
-  const sheet = workbook.getWorksheet(1);
+const loadUcopData = async (directory: string) => {
+  // ucop data is a list of TXT files and a special JSON file that contains metadata
 
-  if (!sheet) {
-    throw new Error('Sheet not found');
+  // load the metadata
+  const metadataPath = path.join(directory, "metadata.json");
+
+  const metadata = JSON.parse(
+    await fs.promises.readFile(metadataPath, "utf-8")
+  ) as PolicyDocument[];
+
+  // go through each .txt file and load the content
+  for (const docMetadata of metadata) {
+    const docPath = path.join(directory, `${docMetadata.filename}.txt`);
+    const content = await fs.promises.readFile(docPath, "utf-8");
+    docMetadata.content = content;
   }
 
-  const documents: KbDocument[] = [];
-
-  sheet.eachRow(async (row) => {
-    const id = row.getCell('A').value?.toString() ?? '';
-    const title = row.getCell('E').value?.toString() ?? '';
-    const htmlContent = row.getCell('J').value?.toString() ?? '';
-
-    documents.push({
-      id,
-      title,
-      htmlContent,
-      text: '',
-    });
-  });
-
-  return documents;
+  return metadata;
 };
 
 const main = async () => {
-  const docs = await processExcel(
-    '/Users/postit/Documents/projects/kb-bot/docs/kb_knowledge.xlsx',
-  );
+  const docs = await loadUcopData("/workspaces/policy/ucop");
 
-  console.log('doc count: ', docs.length);
+  console.log("doc count: ", docs.length);
 
   await processIntoDocuments(docs);
 };
 
 main()
   .then(() => {
-    console.log('Done');
+    console.log("Done");
   })
   .catch((err) => {
     console.error(err);
     process.exit(1);
   });
 
-interface KbDocument {
-  id: string;
+type Metadata = {
   title: string;
-  htmlContent: string;
-  text: string;
-}
+  filename: string;
+  effective_date: string;
+  issuance_date: string;
+  url: string;
+  responsible_office: string;
+  subject_areas: string[];
+};
+
+type PolicyDocument = Metadata & {
+  content?: string;
+};
