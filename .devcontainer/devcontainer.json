@@ -3,13 +3,14 @@
   "dockerComposeFile": "docker-compose.yml",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
   "service": "app",
-"customizations": {
+  "customizations": {
     "vscode": {
-        "settings": {
-            "terminal.integrated.shell.linux": "/bin/bash"
-        }
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"],
+      "settings": {
+        "terminal.integrated.shell.linux": "/bin/bash"
+      }
     }
-},
-"forwardPorts": [8000, 9200, 9300],
+  },
+  "forwardPorts": [8000, 9200, 9300],
   "postCreateCommand": "npm install"
 }
