@@ -94,15 +94,27 @@ const loadUcopData = async (directory: string) => {
   // load the metadata
   const metadataPath = path.join(directory, "metadata.json");
 
-  const metadata = JSON.parse(
-    await fs.promises.readFile(metadataPath, "utf-8")
-  ) as PolicyDocument[];
+  let metadata: PolicyDocument[];
+
+  try {
+    metadata = JSON.parse(
+      await fs.promises.readFile(metadataPath, "utf-8")
+    ) as PolicyDocument[];
+  } catch (error) {
+    console.error("Error reading metadata file:", error);
+    process.exit(1);
+  }
 
   // go through each .txt file and load the content
   for (const docMetadata of metadata) {
     const docPath = path.join(directory, `${docMetadata.filename}.txt`);
-    const content = await fs.promises.readFile(docPath, "utf-8");
-    docMetadata.content = content;
+
+    try {
+      const content = await fs.promises.readFile(docPath, "utf-8");
+      docMetadata.content = content;
+    } catch (error) {
+      console.error("Error reading file:", error);
+    }
   }
 
   return metadata;
