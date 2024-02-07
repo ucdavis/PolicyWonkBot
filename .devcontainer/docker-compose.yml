@@ -18,7 +18,7 @@ services:
       - esdata1:/usr/share/elasticsearch/data:rw
     ports:
       - "9200:9200"
-      - "9300:9300"
+    restart: unless-stopped
 volumes:
   esdata1:
     driver: local

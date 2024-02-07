@@ -2,8 +2,8 @@ import { Client, ClientOptions } from "@elastic/elasticsearch";
 import {
   ElasticClientArgs,
   ElasticVectorSearch,
-} from "langchain/vectorstores/elasticsearch";
-import { OpenAIEmbeddings } from "langchain/embeddings/openai";
+} from "@langchain/community/vectorstores/elasticsearch";
+import { OpenAIEmbeddings } from "@langchain/openai";
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import { Document } from "langchain/document";
 import dotenv from "dotenv";
