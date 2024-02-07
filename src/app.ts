@@ -8,11 +8,11 @@ import {
   RespondFn,
 } from '@slack/bolt';
 import dotenv from 'dotenv';
-import { OpenAIEmbeddings } from 'langchain/embeddings/openai';
+import { OpenAIEmbeddings } from '@langchain/openai';
 import {
   ElasticClientArgs,
   ElasticVectorSearch,
-} from 'langchain/vectorstores/elasticsearch';
+} from '@langchain/community/vectorstores/elasticsearch';
 import OpenAI from 'openai';
 import { ChatCompletionTool } from 'openai/resources/chat/completions';
 
@@ -152,11 +152,11 @@ const handleSlashCommand = async ({
   }
 };
 
-app.command('/kb3', async ({ ack, payload, respond }) => {
+app.command('/policy3', async ({ ack, payload, respond }) => {
   await handleSlashCommand({ ack, payload, respond, modelName: model3 });
 });
 
-app.command('/kb', async ({ ack, payload, respond }) => {
+app.command('/policy', async ({ ack, payload, respond }) => {
   await handleSlashCommand({ ack, payload, respond, modelName: model4 });
 });
 
@@ -217,11 +217,7 @@ const generateInitialResponseText = (
   modelName: string,
   payloadText: string,
 ) => {
-  return `Knowledge Base Bot v0.1-beta by Scott Kirkland. model ${modelName}, elastic search dense vector + cosine, recursive character vectorization. \n\n You asked me: '${payloadText}'. Getting an answer to your question...`;
-};
-
-const getKbLink = (kbNumber: string) => {
-  return `https://servicehub.ucdavis.edu/servicehub?id=ucd_kb_article&sysparm_article=${kbNumber}`;
+  return `Policy Wonk v0.1-beta by Scott Kirkland. model ${modelName}, elastic dense vector + cosine, recursive character vectorization. \n\n You asked me: '${payloadText}'. Getting an answer to your question...`;
 };
 
 const cleanupTitle = (title: string) => {
@@ -233,6 +229,7 @@ const cleanupContent = (content: string) => {
   // if we find any markdown links [title](url), replace them with the special slack format <url|title>
   return content.replace(/\[(.*?)\]\((.*?)\)/g, '<$2|$1>');
 };
+
 const getResponse = async (query: string, modelName: string) => {
   // assume the index is already created
   const search = await ElasticVectorSearch.fromExistingIndex(
@@ -251,8 +248,7 @@ const getResponse = async (query: string, modelName: string) => {
   // Each document should be delimited by triple quotes and then note the excerpt of the document
   const docText = relevantDocs.map((docWithScore) => {
     const doc = docWithScore[0];
-    return `"""${doc.pageContent}\n\n-from <${getKbLink(
-      doc.metadata.id,
+    return `"""${doc.pageContent}\n\n-from <${doc.metadata.url},
     )}|${cleanupTitle(doc.metadata.title)}>"""`;
   });
 
@@ -307,7 +303,7 @@ const getResponse = async (query: string, modelName: string) => {
       {
         role: 'system',
         content: `
-        You are a helpful assitant and will be provided with several documents each delimited by triple quotes and then asked a question.
+        You are a helpful assitant who is an expert in university policy at UC Davis. You will be provided with several documents each delimited by triple quotes and then asked a question.
       Your task is to answer the question in nicely formatted markdown using only the provided documents and to cite the the documents used to answer the question. 
       If the documents do not contain the information needed to answer this question then simply write: "Insufficient information to answer this question." 
       If an answer to the question is provided, it must be annotated with a citation. Only call 'answer_question' once after your entire answer has been formulated. \n\n ${docText}`,
