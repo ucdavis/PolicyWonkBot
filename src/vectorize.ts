@@ -66,6 +66,12 @@ const processIntoDocuments = async (documents: PolicyDocument[]) => {
 
   console.log("storing in elastic split docs: ", splitDocs.length);
 
+  // remove the elastic search index if it exists
+  await clientArgs.client.indices.delete({
+    index: clientArgs.indexName ?? "",
+    ignore_unavailable: true,
+  });
+
   // batch the splitDocs into 200 at a time
   const batchedSplitDocs = [];
 
