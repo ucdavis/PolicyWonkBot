@@ -37,7 +37,23 @@ const clientArgs: ElasticClientArgs = {
     similarity: "cosine", // since this is what openAI uses
   },
 };
-const processIntoDocuments = async (documents: PolicyDocument[]) => {
+
+// revisions are classified as "Resource" but we don't want to include them in the search
+const ignoredClassifications = ["Resource"];
+
+const deleteIndexIfExists = async () => {
+  // remove the elastic search index if it exists
+  await clientArgs.client.indices.delete({
+    index: clientArgs.indexName ?? "",
+    ignore_unavailable: true,
+  });
+};
+
+const processIntoDocuments = async (
+  scope: string,
+  section: string,
+  documents: PolicyDocument[]
+) => {
   const processedDocuments = documents.map((document) => {
     const text = document.content ?? "";
 
@@ -46,14 +62,16 @@ const processIntoDocuments = async (documents: PolicyDocument[]) => {
     return new Document({
       pageContent: text,
       metadata: {
-        scope: "ucop",
-        section: "ucop",
+        scope: scope,
+        section: section,
         title: document.title,
         url: document.url,
         responsible_office: document.responsible_office,
         subject_areas: document.subject_areas,
         effective_date: document.effective_date,
         issuance_date: document.issuance_date,
+        keywords: document.keywords,
+        classifications: document.classifications,
       },
     });
   });
@@ -65,12 +83,6 @@ const processIntoDocuments = async (documents: PolicyDocument[]) => {
   const splitDocs = await textSplitter.splitDocuments(processedDocuments);
 
   console.log("storing in elastic split docs: ", splitDocs.length);
-
-  // remove the elastic search index if it exists
-  await clientArgs.client.indices.delete({
-    index: clientArgs.indexName ?? "",
-    ignore_unavailable: true,
-  });
 
   // batch the splitDocs into 200 at a time
   const batchedSplitDocs = [];
@@ -88,8 +100,8 @@ const processIntoDocuments = async (documents: PolicyDocument[]) => {
   console.log("storage complete");
 };
 
-const loadUcopData = async (directory: string) => {
-  // ucop data is a list of TXT files and a special JSON file that contains metadata
+const loadPolicyData = async (directory: string) => {
+  // data is a list of TXT files and a special JSON file that contains metadata
 
   // load the metadata
   const metadataPath = path.join(directory, "metadata.json");
@@ -104,6 +116,15 @@ const loadUcopData = async (directory: string) => {
     console.error("Error reading metadata file:", error);
     process.exit(1);
   }
+
+  // filter out the ignored classifications
+  metadata = metadata.filter(
+    (doc) =>
+      !doc.classifications ||
+      !doc.classifications.some((classification) =>
+        ignoredClassifications.includes(classification)
+      )
+  );
 
   // go through each .txt file and load the content
   for (const docMetadata of metadata) {
@@ -121,11 +142,37 @@ const loadUcopData = async (directory: string) => {
 };
 
 const main = async () => {
-  const docs = await loadUcopData("/workspaces/policy/ucop");
+  console.log("Starting");
 
-  console.log("doc count: ", docs.length);
+  // TODO: would be nice to only update the index if the data has changed
+  // clear the ES index
+  await deleteIndexIfExists();
 
-  await processIntoDocuments(docs);
+  // get all folders in our policy directory
+  const policyDirectory = "/workspaces/policy";
+
+  const policyDirectoryEntities = await fs.promises.readdir(policyDirectory, {
+    withFileTypes: true,
+  });
+
+  // get all non-hidden directories
+  const policyDirectories = policyDirectoryEntities.filter(
+    (dirent) => dirent.isDirectory() && !dirent.name.startsWith(".")
+  );
+
+  for (const directory of policyDirectories) {
+    console.log("Processing directory: ", directory.name, directory.path);
+
+    const docs = await loadPolicyData(
+      path.join(directory.path, directory.name)
+    );
+
+    console.log(`${directory.name} doc count: `, docs.length);
+
+    const scope = directory.name === "ucop" ? "ucop" : "ucd";
+
+    await processIntoDocuments(scope, directory.name, docs);
+  }
 };
 
 main()
@@ -143,8 +190,11 @@ type Metadata = {
   effective_date: string;
   issuance_date: string;
   url: string;
+  manual: string; // the manual this policy is in
   responsible_office: string;
   subject_areas: string[];
+  classifications: string[];
+  keywords: string[];
 };
 
 type PolicyDocument = Metadata & {
