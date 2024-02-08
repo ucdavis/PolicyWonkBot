@@ -1,28 +1,28 @@
 // Require the Bolt package (github.com/slackapi/bolt)
-import { Client, ClientOptions } from '@elastic/elasticsearch';
+import { Client, ClientOptions } from "@elastic/elasticsearch";
 import {
   App,
   AckFn,
   RespondArguments,
   SlashCommand,
   RespondFn,
-} from '@slack/bolt';
-import dotenv from 'dotenv';
-import { OpenAIEmbeddings } from '@langchain/openai';
+} from "@slack/bolt";
+import dotenv from "dotenv";
+import { OpenAIEmbeddings } from "@langchain/openai";
 import {
   ElasticClientArgs,
   ElasticVectorSearch,
-} from '@langchain/community/vectorstores/elasticsearch';
-import OpenAI from 'openai';
-import { ChatCompletionTool } from 'openai/resources/chat/completions';
+} from "@langchain/community/vectorstores/elasticsearch";
+import OpenAI from "openai";
+import { ChatCompletionTool } from "openai/resources/chat/completions";
 
 dotenv.config();
 
 const openai = new OpenAI();
 
 // define our models to use
-const model4 = 'gpt-4-0125-preview'; // GPT-4 Turbo
-const model3 = 'gpt-3.5-turbo-0125'; // GPT-3.5 Turbo
+const model4 = "gpt-4-0125-preview"; // GPT-4 Turbo
+const model3 = "gpt-3.5-turbo-0125"; // GPT-3.5 Turbo
 
 let app = new App({
   token: process.env.SLACK_BOT_TOKEN,
@@ -42,7 +42,7 @@ if (process.env.SLACK_APP_TOKEN) {
 // let's try to do full RAG with OpenAI assistants & ElasticSearch
 const openAIApiKey = process.env.OPENAI_API_KEY; // Replace with your API key or use environment variable
 if (!openAIApiKey) {
-  console.error('OpenAI API key is required');
+  console.error("OpenAI API key is required");
   process.exit(1);
 }
 
@@ -50,30 +50,30 @@ const embeddings = new OpenAIEmbeddings();
 
 // get my vector store
 const config: ClientOptions = {
-  node: process.env.ELASTIC_URL ?? 'http://127.0.0.1:9200',
+  node: process.env.ELASTIC_URL ?? "http://127.0.0.1:9200",
   auth: {
-    username: process.env.ELASTIC_SEARCHER_USERNAME ?? 'elastic',
-    password: process.env.ELASTIC_SEARCHER_PASSWORD ?? 'changeme',
+    username: process.env.ELASTIC_SEARCHER_USERNAME ?? "elastic",
+    password: process.env.ELASTIC_SEARCHER_PASSWORD ?? "changeme",
   },
 };
 
 const clientArgs: ElasticClientArgs = {
   client: new Client(config),
-  indexName: process.env.ELASTIC_INDEX ?? 'test_vectorstore4',
+  indexName: process.env.ELASTIC_INDEX ?? "test_vectorstore4",
   vectorSearchOptions: {
-    similarity: 'cosine', // since this is what openAI uses
+    similarity: "cosine", // since this is what openAI uses
   },
 };
 
 // mentions
-app.event('app_mention', async ({ event, client }) => {
+app.event("app_mention", async ({ event, client }) => {
   const modelName = model3; // use gpt3 for testing
 
   try {
     // First, react to the mention with an emoji
     await client.reactions.add({
       channel: event.channel,
-      name: 'eyes', // Emoji code, replace 'eyes' with the emoji you want to use without colons
+      name: "eyes", // Emoji code, replace 'eyes' with the emoji you want to use without colons
       timestamp: event.ts,
     });
 
@@ -126,7 +126,7 @@ const handleSlashCommand = async ({
 
     if (!payloadText) {
       await respond(
-        'You can ask me anything about the knowledge base. ex: /kb how to create a new user?',
+        "You can ask me anything about the knowledge base. ex: /kb how to create a new user?"
       );
       return;
     }
@@ -152,21 +152,21 @@ const handleSlashCommand = async ({
   }
 };
 
-app.command('/policy3', async ({ ack, payload, respond }) => {
+app.command("/policy3", async ({ ack, payload, respond }) => {
   await handleSlashCommand({ ack, payload, respond, modelName: model3 });
 });
 
-app.command('/policy', async ({ ack, payload, respond }) => {
+app.command("/policy", async ({ ack, payload, respond }) => {
   await handleSlashCommand({ ack, payload, respond, modelName: model4 });
 });
 
 // just in case we can't render with blocks
 const convertToText = (content: AnswerQuestionFunctionArgs[]) => {
-  let message = '';
+  let message = "";
   for (const answer of content) {
-    message += answer.content + '\n\n';
+    message += answer.content + "\n\n";
     if (answer.citations.length > 0) {
-      message += '*Citations*\n';
+      message += "*Citations*\n";
       answer.citations.forEach((citation) => {
         message += `<${citation.url}|${citation.title}>\n`;
       });
@@ -182,27 +182,27 @@ const convertToBlocks = (content: AnswerQuestionFunctionArgs[]) => {
   for (const answer of content) {
     const cleanedAnswerContent = cleanupContent(answer.content);
     messageBlocks.push({
-      type: 'section',
+      type: "section",
       text: {
-        type: 'mrkdwn',
+        type: "mrkdwn",
         text: cleanedAnswerContent,
       },
     });
 
     if (answer.citations.length > 0) {
       messageBlocks.push({
-        type: 'section',
+        type: "section",
         text: {
-          type: 'mrkdwn',
-          text: '*Citations*',
+          type: "mrkdwn",
+          text: "*Citations*",
         },
       });
 
       answer.citations.forEach((citation) => {
         messageBlocks.push({
-          type: 'section',
+          type: "section",
           text: {
-            type: 'mrkdwn',
+            type: "mrkdwn",
             text: `<${citation.url}|${citation.title}>`,
           },
         });
@@ -215,26 +215,26 @@ const convertToBlocks = (content: AnswerQuestionFunctionArgs[]) => {
 
 const generateInitialResponseText = (
   modelName: string,
-  payloadText: string,
+  payloadText: string
 ) => {
   return `Policy Wonk v0.1-beta by Scott Kirkland. model ${modelName}, elastic dense vector + cosine, recursive character vectorization. \n\n You asked me: '${payloadText}'. Getting an answer to your question...`;
 };
 
 const cleanupTitle = (title: string) => {
   // replace any quotes
-  return title.replace(/"/g, '');
+  return title.replace(/"/g, "");
 };
 
 const cleanupContent = (content: string) => {
   // if we find any markdown links [title](url), replace them with the special slack format <url|title>
-  return content.replace(/\[(.*?)\]\((.*?)\)/g, '<$2|$1>');
+  return content.replace(/\[(.*?)\]\((.*?)\)/g, "<$2|$1>");
 };
 
 const getResponse = async (query: string, modelName: string) => {
   // assume the index is already created
   const search = await ElasticVectorSearch.fromExistingIndex(
     embeddings,
-    clientArgs,
+    clientArgs
   );
 
   // get our search results
@@ -257,40 +257,40 @@ const getResponse = async (query: string, modelName: string) => {
   // construct our tool function which defines the expected output structure
   const tools: ChatCompletionTool[] = [
     {
-      type: 'function',
+      type: "function",
       function: {
-        name: 'answer_question',
-        description: 'Answer a question and provide citations',
+        name: "answer_question",
+        description: "Answer a question and provide citations",
         parameters: {
-          $schema: 'http://json-schema.org/draft-07/schema#',
-          type: 'object',
+          $schema: "http://json-schema.org/draft-07/schema#",
+          type: "object",
           properties: {
             content: {
-              type: 'string',
+              type: "string",
               description:
-                'The content of the answer to the question, in markdown format',
+                "The content of the answer to the question, in markdown format",
             },
             citations: {
-              type: 'array',
+              type: "array",
               items: {
-                type: 'object',
+                type: "object",
                 properties: {
                   title: {
-                    type: 'string',
-                    description: 'The title of the document cited',
+                    type: "string",
+                    description: "The title of the document cited",
                   },
                   url: {
-                    type: 'string',
-                    format: 'uri',
-                    description: 'The url of the document cited',
+                    type: "string",
+                    format: "uri",
+                    description: "The url of the document cited",
                   },
                 },
-                required: ['title', 'url'],
+                required: ["title", "url"],
                 additionalProperties: false,
               },
             },
           },
-          required: ['content', 'citations'],
+          required: ["content", "citations"],
           additionalProperties: false,
         },
       },
@@ -301,7 +301,7 @@ const getResponse = async (query: string, modelName: string) => {
     model: modelName,
     messages: [
       {
-        role: 'system',
+        role: "system",
         content: `
         You are a helpful assitant who is an expert in university policy at UC Davis. You will be provided with several documents each delimited by triple quotes and then asked a question.
       Your task is to answer the question in nicely formatted markdown using only the provided documents and to cite the the documents used to answer the question. 
@@ -309,13 +309,13 @@ const getResponse = async (query: string, modelName: string) => {
       If an answer to the question is provided, it must be annotated with a citation. Only call 'answer_question' once after your entire answer has been formulated. \n\n ${docText}`,
       },
       {
-        role: 'user',
-        content: 'Question: ' + query,
+        role: "user",
+        content: "Question: " + query,
       },
     ],
     temperature: 0.2, // play with this to get more consistent results
     tools: tools,
-    tool_choice: { type: 'function', function: { name: 'answer_question' } },
+    tool_choice: { type: "function", function: { name: "answer_question" } },
   });
 
   // get the most recent message
@@ -331,7 +331,7 @@ const getResponse = async (query: string, modelName: string) => {
     // console.log('toolCalls', toolCalls);
     return toolCalls.map((toolCall) => {
       return JSON.parse(
-        toolCall.function.arguments,
+        toolCall.function.arguments
       ) as AnswerQuestionFunctionArgs;
     });
   } else {
@@ -339,7 +339,7 @@ const getResponse = async (query: string, modelName: string) => {
     return [
       {
         content:
-          'sorry, something went wrong trying to answer your question.  Please try again.',
+          "sorry, something went wrong trying to answer your question.  Please try again.",
         citations: [],
       },
     ];
