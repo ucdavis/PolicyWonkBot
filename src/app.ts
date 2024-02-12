@@ -1,4 +1,12 @@
-// Require the Bolt package (github.com/slackapi/bolt)
+
+/**
+ * This file contains the implementation of a Slack app called "Policy Wonk".
+ * It uses the @slack/bolt library to handle events and slash commands.
+ * The app interacts with the OpenAI API to generate responses to user queries.
+ * It also utilizes the @elastic/elasticsearch library to perform vector searches on an Elasticsearch index.
+ * The app listens for app mentions and slash commands, and responds with answers and citations.
+ * The main functionality is implemented in the event and command handlers.
+ */
 import { Client, ClientOptions } from "@elastic/elasticsearch";
 import {
   App,
