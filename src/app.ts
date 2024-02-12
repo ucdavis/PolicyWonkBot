@@ -67,7 +67,7 @@ const clientArgs: ElasticClientArgs = {
 
 // mentions
 app.event("app_mention", async ({ event, client }) => {
-  const modelName = model3; // use gpt3 for testing
+  const modelName = model4; // use gpt4 for testing -- slow but better answers
 
   try {
     // First, react to the mention with an emoji
@@ -243,7 +243,13 @@ const getResponse = async (query: string, modelName: string) => {
 
   // result is array of arrays, with each array containing the document [0] and the similarity score [1]
 
-  // console.log('relevantDocs', relevantDocs);
+  // console.log(
+  //   "relevantDocs",
+  //   relevantDocs.map((docWithScore) => ({
+  //     ...docWithScore[0].metadata,
+  //     score: docWithScore[1],
+  //   }))
+  // );
 
   // Each document should be delimited by triple quotes and then note the excerpt of the document
   const docText = relevantDocs.map((docWithScore) => {
