@@ -317,7 +317,7 @@ const getResponse = async (query: string, modelName: string) => {
       {
         role: "system",
         content: `
-        You are a helpful assitant who is an expert in university policy at UC Davis. You will be provided with several documents each delimited by triple quotes and then asked a question.
+        You are a helpful assistant who is an expert in university policy at UC Davis. You will be provided with several documents each delimited by triple quotes and then asked a question.
       Your task is to answer the question in nicely formatted markdown using only the provided documents and to cite the the documents used to answer the question. 
       If the documents do not contain the information needed to answer this question then simply write: "Insufficient information to answer this question." 
       If an answer to the question is provided, it must be annotated with a citation. Only call 'answer_question' once after your entire answer has been formulated. \n\n ${docText}`,
