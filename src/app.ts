@@ -1,4 +1,3 @@
-
 /**
  * This file contains the implementation of a Slack app called "Policy Wonk".
  * It uses the @slack/bolt library to handle events and slash commands.
@@ -16,11 +15,6 @@ import {
   RespondFn,
 } from "@slack/bolt";
 import dotenv from "dotenv";
-import { OpenAIEmbeddings } from "@langchain/openai";
-import {
-  ElasticClientArgs,
-  ElasticVectorSearch,
-} from "@langchain/community/vectorstores/elasticsearch";
 import OpenAI from "openai";
 import { ChatCompletionTool } from "openai/resources/chat/completions";
 
@@ -53,9 +47,6 @@ if (!openAIApiKey) {
   console.error("OpenAI API key is required");
   process.exit(1);
 }
-
-const embeddings = new OpenAIEmbeddings();
-
 // get my vector store
 const config: ClientOptions = {
   node: process.env.ELASTIC_URL ?? "http://127.0.0.1:9200",
@@ -65,13 +56,9 @@ const config: ClientOptions = {
   },
 };
 
-const clientArgs: ElasticClientArgs = {
-  client: new Client(config),
-  indexName: process.env.ELASTIC_INDEX ?? "test_vectorstore4",
-  vectorSearchOptions: {
-    similarity: "cosine", // since this is what openAI uses
-  },
-};
+const searchClient: Client = new Client(config);
+
+const indexName = process.env.ELASTIC_INDEX ?? "test_vectorstore4";
 
 // mentions
 app.event("app_mention", async ({ event, client }) => {
@@ -238,32 +225,40 @@ const cleanupContent = (content: string) => {
   return content.replace(/\[(.*?)\]\((.*?)\)/g, "<$2|$1>");
 };
 
+const getEmbeddings = async (query: string) => {
+  // get our embeddings
+  const embeddings = await openai.embeddings.create({
+    model: "text-embedding-3-large", // needs to be the same model as we used to index
+    input: query,
+  });
+
+  return embeddings;
+};
+
 const getResponse = async (query: string, modelName: string) => {
   // assume the index is already created
-  const search = await ElasticVectorSearch.fromExistingIndex(
-    embeddings,
-    clientArgs
-  );
+  const queryEmbeddings = await getEmbeddings(query);
 
   // get our search results
-  // TODO: can use similarity score to filter out low confidence results
-  const relevantDocs = await search.similaritySearchWithScore(query, 5);
+  const searchResults = await searchClient.search({
+    index: indexName,
+    size: 5,
+    body: {
+      knn: {
+        field: "vector",
+        query_vector: queryEmbeddings.data[0].embedding,
+        k: 5,
+        num_candidates: 200,
+      },
+    },
+  });
 
-  // result is array of arrays, with each array containing the document [0] and the similarity score [1]
-
-  // console.log(
-  //   "relevantDocs",
-  //   relevantDocs.map((docWithScore) => ({
-  //     ...docWithScore[0].metadata,
-  //     score: docWithScore[1],
-  //   }))
-  // );
+  console.log("searchResults", searchResults.hits.hits);
 
   // Each document should be delimited by triple quotes and then note the excerpt of the document
-  const docText = relevantDocs.map((docWithScore) => {
-    const doc = docWithScore[0];
-    return `"""${doc.pageContent}\n\n-from <${doc.metadata.url},
-    )}|${cleanupTitle(doc.metadata.title)}>"""`;
+  const docText = searchResults.hits.hits.map((hit: any) => {
+    return `"""${hit._source.text}\n\n-from <${hit._source.metadata.url},
+    )}|${cleanupTitle(hit._source.metadata.title)}>"""`;
   });
 
   // console.log('docText', docText);
