@@ -17,6 +17,7 @@ import {
 import dotenv from "dotenv";
 import OpenAI from "openai";
 import { ChatCompletionTool } from "openai/resources/chat/completions";
+import { ensureLogIndexExists, logReaction, logResponse } from "./logging";
 
 dotenv.config();
 
@@ -64,6 +65,8 @@ const indexName = process.env.ELASTIC_INDEX ?? "test_vectorstore4";
 app.event("app_mention", async ({ event, client }) => {
   const modelName = model4; // use gpt4 for testing -- slow but better answers
 
+  const interactionId = event.event_ts; // Using the event timestamp as the unique identifier for this interaction
+
   try {
     // First, react to the mention with an emoji
     await client.reactions.add({
@@ -75,7 +78,13 @@ app.event("app_mention", async ({ event, client }) => {
     // get the payload text
     const payloadText = event.text;
 
-    const responseText = generateInitialResponseText(modelName, payloadText);
+    // strip out the mention
+    const filteredPayloadText = payloadText.replace(/<@.*>/, "").trim();
+
+    const responseText = generateInitialResponseText(
+      modelName,
+      filteredPayloadText
+    );
 
     // Reply in a thread
     await client.chat.postMessage({
@@ -85,10 +94,10 @@ app.event("app_mention", async ({ event, client }) => {
     });
 
     // get ask our AI
-    const response = await getResponse(payloadText, modelName);
+    const response = await getResponse(filteredPayloadText, modelName);
 
     // convert to slack blocks
-    const blocks = convertToBlocks(response);
+    const blocks = convertToBlocks(response, interactionId);
 
     // Post another message in the thread after the API call
     await client.chat.postMessage({
@@ -97,6 +106,26 @@ app.event("app_mention", async ({ event, client }) => {
       text: convertToText(response),
       thread_ts: event.ts,
     });
+
+    // log the interaction
+    try {
+      const messageMetadata: MessageMetadata = {
+        user_id: event.user || "",
+        team_id: event.team || "",
+        channel_id: event.channel,
+        interaction_type: "app_mention",
+        llm_model: modelName,
+        timestamp: new Date(),
+      };
+      await logResponse(
+        interactionId,
+        messageMetadata,
+        filteredPayloadText,
+        response
+      );
+    } catch (error) {
+      console.error("Error logging response", error);
+    }
   } catch (error) {
     console.error(error);
   }
@@ -117,6 +146,8 @@ const handleSlashCommand = async ({
   try {
     await ack();
 
+    const interactionId = payload.trigger_id; // or generate a UUID, or use a timestamp
+
     const payloadText = payload.text;
 
     if (!payloadText) {
@@ -136,12 +167,27 @@ const handleSlashCommand = async ({
     // console.log('response', response);
 
     // convert to slack blocks
-    const blocks = convertToBlocks(response);
+    const blocks = convertToBlocks(response, interactionId);
 
     // update the message with the response
     await respond({
       blocks: blocks,
     });
+
+    // log the interaction
+    try {
+      const messageMetadata: MessageMetadata = {
+        user_id: payload.user_id,
+        team_id: payload.team_id,
+        channel_id: payload.channel_id,
+        timestamp: new Date(),
+        interaction_type: "slash_command",
+        llm_model: modelName,
+      };
+      await logResponse(interactionId, messageMetadata, payloadText, response);
+    } catch (error) {
+      console.error("Error logging response", error);
+    }
   } catch (error) {
     console.error(error);
   }
@@ -153,6 +199,31 @@ app.command("/policy3", async ({ ack, payload, respond }) => {
 
 app.command("/policy", async ({ ack, payload, respond }) => {
   await handleSlashCommand({ ack, payload, respond, modelName: model4 });
+});
+
+// handle feedback
+app.action("thumbs_up", async ({ ack, say, action }) => {
+  await ack();
+
+  if ("value" in action) {
+    // value is thumbs_up-interactionId
+    const [feedbackType, interactionId] = (action.value as string).split("-");
+    await logReaction(interactionId, feedbackType);
+  }
+
+  await say("Thank you for your feedback! 👍");
+});
+
+app.action("thumbs_down", async ({ ack, say, action }) => {
+  await ack();
+
+  if ("value" in action) {
+    // value is thumbs_up-interactionId
+    const [feedbackType, interactionId] = (action.value as string).split("-");
+    await logReaction(interactionId, feedbackType);
+  }
+
+  await say("Thank you for your feedback!");
 });
 
 // just in case we can't render with blocks
@@ -170,7 +241,10 @@ const convertToText = (content: AnswerQuestionFunctionArgs[]) => {
   return message;
 };
 
-const convertToBlocks = (content: AnswerQuestionFunctionArgs[]) => {
+const convertToBlocks = (
+  content: AnswerQuestionFunctionArgs[],
+  interactionId: string
+) => {
   // Constructing Slack message blocks
   const messageBlocks = [];
 
@@ -205,6 +279,44 @@ const convertToBlocks = (content: AnswerQuestionFunctionArgs[]) => {
     }
   }
 
+  const askForFeedback = true;
+
+  if (askForFeedback) {
+    messageBlocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "Was this helpful?",
+      },
+    });
+
+    messageBlocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Yes 👍",
+            emoji: true,
+          },
+          value: `thumbs_up-${interactionId}`,
+          action_id: "thumbs_up",
+        },
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "No 👎",
+            emoji: true,
+          },
+          value: `thumbs_down-${interactionId}`,
+          action_id: "thumbs_down",
+        },
+      ],
+    });
+  }
+
   return messageBlocks;
 };
 
@@ -212,7 +324,7 @@ const generateInitialResponseText = (
   modelName: string,
   payloadText: string
 ) => {
-  return `Policy Wonk v0.1-beta by Scott Kirkland. model ${modelName}, elastic dense vector + cosine, recursive character vectorization. \n\n You asked me: '${payloadText}'. Getting an answer to your question...`;
+  return `Policy Wonk v0.2-beta by Scott Kirkland. model ${modelName}, elastic dense vector + knn, recursive character vectorization. \n\n You asked me: '${payloadText}'. Getting an answer to your question...`;
 };
 
 const cleanupTitle = (title: string) => {
@@ -359,13 +471,24 @@ const getResponse = async (query: string, modelName: string) => {
   const port = process.env.PORT || 3000;
   await app.start(port);
 
-  console.log(`⚡️ Bolt app is running at ${port}`);
+  await ensureLogIndexExists();
+
+  console.log(`⚡️ PolicyWonk is running at ${port}`);
 })();
 
-interface AnswerQuestionFunctionArgs {
+export interface AnswerQuestionFunctionArgs {
   content: string;
   citations: {
     title: string;
     url: string;
   }[];
+}
+
+export interface MessageMetadata {
+  user_id: string;
+  team_id: string;
+  channel_id: string;
+  timestamp: Date;
+  interaction_type: "app_mention" | "slash_command";
+  llm_model: string;
 }
