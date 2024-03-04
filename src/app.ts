@@ -62,7 +62,7 @@ const searchClient: Client = new Client(config);
 const indexName = process.env.ELASTIC_INDEX ?? "test_vectorstore4";
 
 // mentions
-app.event("app_mention", async ({ event, body, client }) => {
+app.event("app_mention", async ({ event, client }) => {
   const modelName = model4; // use gpt4 for testing -- slow but better answers
 
   const interactionId = event.event_ts; // Using the event timestamp as the unique identifier for this interaction
@@ -78,7 +78,10 @@ app.event("app_mention", async ({ event, body, client }) => {
     // get the payload text
     const payloadText = event.text;
 
-    const responseText = generateInitialResponseText(modelName, payloadText);
+    // strip out the mention
+    const filteredPayloadText = payloadText.replace(/<@.*>/, "").trim();
+
+    const responseText = generateInitialResponseText(modelName, filteredPayloadText);
 
     // Reply in a thread
     await client.chat.postMessage({
@@ -88,7 +91,7 @@ app.event("app_mention", async ({ event, body, client }) => {
     });
 
     // get ask our AI
-    const response = await getResponse(payloadText, modelName);
+    const response = await getResponse(filteredPayloadText, modelName);
 
     // convert to slack blocks
     const blocks = convertToBlocks(response, interactionId);
@@ -103,7 +106,7 @@ app.event("app_mention", async ({ event, body, client }) => {
 
     // log the interaction
     try {
-      await logResponse(interactionId, body.user.id, payloadText, response);
+      await logResponse(interactionId, event.user || 'unknown', filteredPayloadText, response);
     } catch (error) {
       console.error("Error logging response", error);
     }
