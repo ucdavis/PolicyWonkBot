@@ -1,6 +1,6 @@
 import { Client, ClientOptions } from "@elastic/elasticsearch";
 import dotenv from "dotenv";
-import { AnswerQuestionFunctionArgs } from "./app";
+import { AnswerQuestionFunctionArgs, MessageMetadata } from "./app";
 
 dotenv.config();
 
@@ -32,6 +32,8 @@ export const ensureLogIndexExists = async () => {
       mappings: {
         properties: {
           user_id: { type: "keyword" },
+          channel_id: { type: "keyword" },
+          team_id: { type: "keyword" },
           query: { type: "text" },
           response: { type: "object" },
           reaction: { type: "keyword" },
@@ -47,7 +49,7 @@ export const ensureLogIndexExists = async () => {
 // use elasticsearch to log the user's query and the results
 export const logResponse = async (
   id: string,
-  userId: string,
+  metadata: MessageMetadata,
   query: string,
   response: AnswerQuestionFunctionArgs[]
 ) => {
@@ -56,10 +58,9 @@ export const logResponse = async (
     index: indexName,
     id,
     body: {
-      userId,
+      ...metadata,
       query,
       response,
-      timestamp: new Date(),
     },
   });
 };

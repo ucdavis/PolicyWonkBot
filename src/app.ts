@@ -106,7 +106,8 @@ app.event("app_mention", async ({ event, client }) => {
 
     // log the interaction
     try {
-      await logResponse(interactionId, event.user || 'unknown', filteredPayloadText, response);
+      const messageMetadata: MessageMetadata = { user_id: event.user || '', team_id: event.team || '', channel_id: event.channel, timestamp: new Date() };
+      await logResponse(interactionId, messageMetadata, filteredPayloadText, response);
     } catch (error) {
       console.error("Error logging response", error);
     }
@@ -160,7 +161,8 @@ const handleSlashCommand = async ({
 
     // log the interaction
     try {
-      await logResponse(interactionId, payload.user_id, payloadText, response);
+      const messageMetadata: MessageMetadata = { user_id: payload.user_id, team_id: payload.team_id, channel_id: payload.channel_id, timestamp: new Date() };
+      await logResponse(interactionId, messageMetadata, payloadText, response);
     } catch (error) {
       console.error("Error logging response", error);
     }
@@ -458,4 +460,11 @@ export interface AnswerQuestionFunctionArgs {
     title: string;
     url: string;
   }[];
+}
+
+export interface MessageMetadata {
+  user_id: string;
+  team_id: string;
+  channel_id: string;
+  timestamp: Date;
 }
