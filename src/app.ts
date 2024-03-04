@@ -300,7 +300,7 @@ const generateInitialResponseText = (
   modelName: string,
   payloadText: string
 ) => {
-  return `Policy Wonk v0.1-beta by Scott Kirkland. model ${modelName}, elastic dense vector + cosine, recursive character vectorization. \n\n You asked me: '${payloadText}'. Getting an answer to your question...`;
+  return `Policy Wonk v0.2-beta by Scott Kirkland. model ${modelName}, elastic dense vector + knn, recursive character vectorization. \n\n You asked me: '${payloadText}'. Getting an answer to your question...`;
 };
 
 const cleanupTitle = (title: string) => {
