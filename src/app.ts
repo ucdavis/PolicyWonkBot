@@ -17,6 +17,7 @@ import {
 import dotenv from "dotenv";
 import OpenAI from "openai";
 import { ChatCompletionTool } from "openai/resources/chat/completions";
+import { ensureLogIndexExists, logReaction, logResponse } from "./logging";
 
 dotenv.config();
 
@@ -61,8 +62,10 @@ const searchClient: Client = new Client(config);
 const indexName = process.env.ELASTIC_INDEX ?? "test_vectorstore4";
 
 // mentions
-app.event("app_mention", async ({ event, client }) => {
+app.event("app_mention", async ({ event, body, client }) => {
   const modelName = model4; // use gpt4 for testing -- slow but better answers
+
+  const interactionId = event.event_ts; // Using the event timestamp as the unique identifier for this interaction
 
   try {
     // First, react to the mention with an emoji
@@ -88,7 +91,7 @@ app.event("app_mention", async ({ event, client }) => {
     const response = await getResponse(payloadText, modelName);
 
     // convert to slack blocks
-    const blocks = convertToBlocks(response);
+    const blocks = convertToBlocks(response, interactionId);
 
     // Post another message in the thread after the API call
     await client.chat.postMessage({
@@ -97,6 +100,13 @@ app.event("app_mention", async ({ event, client }) => {
       text: convertToText(response),
       thread_ts: event.ts,
     });
+
+    // log the interaction
+    try {
+      await logResponse(interactionId, body.user.id, payloadText, response);
+    } catch (error) {
+      console.error("Error logging response", error);
+    }
   } catch (error) {
     console.error(error);
   }
@@ -117,6 +127,8 @@ const handleSlashCommand = async ({
   try {
     await ack();
 
+    const interactionId = payload.trigger_id; // or generate a UUID, or use a timestamp
+
     const payloadText = payload.text;
 
     if (!payloadText) {
@@ -136,12 +148,19 @@ const handleSlashCommand = async ({
     // console.log('response', response);
 
     // convert to slack blocks
-    const blocks = convertToBlocks(response);
+    const blocks = convertToBlocks(response, interactionId);
 
     // update the message with the response
     await respond({
       blocks: blocks,
     });
+
+    // log the interaction
+    try {
+      await logResponse(interactionId, payload.user_id, payloadText, response);
+    } catch (error) {
+      console.error("Error logging response", error);
+    }
   } catch (error) {
     console.error(error);
   }
@@ -153,6 +172,31 @@ app.command("/policy3", async ({ ack, payload, respond }) => {
 
 app.command("/policy", async ({ ack, payload, respond }) => {
   await handleSlashCommand({ ack, payload, respond, modelName: model4 });
+});
+
+// handle feedback
+app.action("thumbs_up", async ({ ack, say, action }) => {
+  await ack();
+
+  if ("value" in action) {
+    // value is thumbs_up-interactionId
+    const [feedbackType, interactionId] = (action.value as string).split("-");
+    await logReaction(interactionId, feedbackType);
+  }
+
+  await say("Thank you for your feedback! 👍");
+});
+
+app.action("thumbs_down", async ({ ack, say, action }) => {
+  await ack();
+
+  if ("value" in action) {
+    // value is thumbs_up-interactionId
+    const [feedbackType, interactionId] = (action.value as string).split("-");
+    await logReaction(interactionId, feedbackType);
+  }
+
+  await say("Thank you for your feedback!");
 });
 
 // just in case we can't render with blocks
@@ -170,7 +214,10 @@ const convertToText = (content: AnswerQuestionFunctionArgs[]) => {
   return message;
 };
 
-const convertToBlocks = (content: AnswerQuestionFunctionArgs[]) => {
+const convertToBlocks = (
+  content: AnswerQuestionFunctionArgs[],
+  interactionId: string
+) => {
   // Constructing Slack message blocks
   const messageBlocks = [];
 
@@ -203,6 +250,44 @@ const convertToBlocks = (content: AnswerQuestionFunctionArgs[]) => {
         });
       });
     }
+  }
+
+  const askForFeedback = true;
+
+  if (askForFeedback) {
+    messageBlocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "Was this helpful?",
+      },
+    });
+
+    messageBlocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Yes 👍",
+            emoji: true,
+          },
+          value: `thumbs_up-${interactionId}`,
+          action_id: "thumbs_up",
+        },
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "No 👎",
+            emoji: true,
+          },
+          value: `thumbs_down-${interactionId}`,
+          action_id: "thumbs_down",
+        },
+      ],
+    });
   }
 
   return messageBlocks;
@@ -359,10 +444,12 @@ const getResponse = async (query: string, modelName: string) => {
   const port = process.env.PORT || 3000;
   await app.start(port);
 
-  console.log(`⚡️ Bolt app is running at ${port}`);
+  await ensureLogIndexExists();
+
+  console.log(`⚡️ PolicyWonk is running at ${port}`);
 })();
 
-interface AnswerQuestionFunctionArgs {
+export interface AnswerQuestionFunctionArgs {
   content: string;
   citations: {
     title: string;
