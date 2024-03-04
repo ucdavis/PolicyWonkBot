@@ -239,21 +239,20 @@ const getResponse = async (query: string, modelName: string) => {
   // assume the index is already created
   const queryEmbeddings = await getEmbeddings(query);
 
+  const searchResultMaxSize = 5;
   // get our search results
   const searchResults = await searchClient.search({
     index: indexName,
-    size: 5,
+    size: searchResultMaxSize,
     body: {
       knn: {
-        field: "vector",
-        query_vector: queryEmbeddings.data[0].embedding,
-        k: 5,
+        field: "vector", // the field we want to search, created by PolicyAcquisition
+        query_vector: queryEmbeddings.data[0].embedding, // the query vector
+        k: searchResultMaxSize,
         num_candidates: 200,
       },
     },
   });
-
-  console.log("searchResults", searchResults.hits.hits);
 
   // Each document should be delimited by triple quotes and then note the excerpt of the document
   const docText = searchResults.hits.hits.map((hit: any) => {
