@@ -34,6 +34,8 @@ export const ensureLogIndexExists = async () => {
           user_id: { type: "keyword" },
           channel_id: { type: "keyword" },
           team_id: { type: "keyword" },
+          interaction_type: { type: "keyword" },
+          llm_model: { type: "keyword" },
           query: { type: "text" },
           response: { type: "object" },
           reaction: { type: "keyword" },

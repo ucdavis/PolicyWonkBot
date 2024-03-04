@@ -81,7 +81,10 @@ app.event("app_mention", async ({ event, client }) => {
     // strip out the mention
     const filteredPayloadText = payloadText.replace(/<@.*>/, "").trim();
 
-    const responseText = generateInitialResponseText(modelName, filteredPayloadText);
+    const responseText = generateInitialResponseText(
+      modelName,
+      filteredPayloadText
+    );
 
     // Reply in a thread
     await client.chat.postMessage({
@@ -106,8 +109,20 @@ app.event("app_mention", async ({ event, client }) => {
 
     // log the interaction
     try {
-      const messageMetadata: MessageMetadata = { user_id: event.user || '', team_id: event.team || '', channel_id: event.channel, timestamp: new Date() };
-      await logResponse(interactionId, messageMetadata, filteredPayloadText, response);
+      const messageMetadata: MessageMetadata = {
+        user_id: event.user || "",
+        team_id: event.team || "",
+        channel_id: event.channel,
+        interaction_type: "app_mention",
+        llm_model: modelName,
+        timestamp: new Date(),
+      };
+      await logResponse(
+        interactionId,
+        messageMetadata,
+        filteredPayloadText,
+        response
+      );
     } catch (error) {
       console.error("Error logging response", error);
     }
@@ -161,7 +176,14 @@ const handleSlashCommand = async ({
 
     // log the interaction
     try {
-      const messageMetadata: MessageMetadata = { user_id: payload.user_id, team_id: payload.team_id, channel_id: payload.channel_id, timestamp: new Date() };
+      const messageMetadata: MessageMetadata = {
+        user_id: payload.user_id,
+        team_id: payload.team_id,
+        channel_id: payload.channel_id,
+        timestamp: new Date(),
+        interaction_type: "slash_command",
+        llm_model: modelName,
+      };
       await logResponse(interactionId, messageMetadata, payloadText, response);
     } catch (error) {
       console.error("Error logging response", error);
@@ -467,4 +489,6 @@ export interface MessageMetadata {
   team_id: string;
   channel_id: string;
   timestamp: Date;
+  interaction_type: "app_mention" | "slash_command";
+  llm_model: string;
 }
