@@ -13,7 +13,12 @@ import {
   RespondArguments,
   SlashCommand,
   RespondFn,
+  BlockElementAction,
+  SlackAction,
+  ButtonAction,
+  ButtonClick,
 } from "@slack/bolt";
+import { WebClient } from "@slack/web-api";
 import dotenv from "dotenv";
 import OpenAI from "openai";
 import { ChatCompletionTool } from "openai/resources/chat/completions";
@@ -97,7 +102,7 @@ app.event("app_mention", async ({ event, client }) => {
     const response = await getResponse(filteredPayloadText, modelName);
 
     // convert to slack blocks
-    const blocks = convertToBlocks(response, "app_mention", interactionId);
+    const blocks = convertToBlocks(response, interactionId);
 
     // Post another message in the thread after the API call
     await client.chat.postMessage({
@@ -167,7 +172,7 @@ const handleSlashCommand = async ({
     // console.log('response', response);
 
     // convert to slack blocks
-    const blocks = convertToBlocks(response, "slash_command", interactionId);
+    const blocks = convertToBlocks(response, interactionId);
 
     // update the message with the response
     await respond({
@@ -193,6 +198,27 @@ const handleSlashCommand = async ({
   }
 };
 
+const handleFeedback = async (
+  action: ButtonAction | ButtonClick,
+  body: SlackAction,
+  client: WebClient
+) => {
+  if (body.type === "block_actions") {
+    await client.chat.postEphemeral({
+      channel: body.container.channel_id,
+      user: body.user.id,
+      thread_ts: body.container.thread_ts,
+      text: "Thank you for your feedback! 👍",
+    });
+  }
+
+  if (action.type === "button") {
+    const [feedbackType, interactionId] = (action.value as string).split("-");
+
+    await logReaction(interactionId, feedbackType);
+  }
+};
+
 app.command("/policy3", async ({ ack, payload, respond }) => {
   await handleSlashCommand({ ack, payload, respond, modelName: model3 });
 });
@@ -202,38 +228,20 @@ app.command("/policy", async ({ ack, payload, respond }) => {
 });
 
 // handle feedback
-app.action("thumbs_up", async ({ ack, say, action }) => {
+app.action("thumbs_up", async ({ ack, action, body, client }) => {
   await ack();
 
-  if ("value" in action) {
-    // value is thumbs_up-[type]-[interactionId
-    const [feedbackType, interactionType, interactionId] = (
-      action.value as string
-    ).split("-");
-
-    if (interactionType === "app_mention") {
-      await logReaction(interactionId, feedbackType);
-    }
+  if (action.type === "button") {
+    handleFeedback(action, body, client);
   }
-
-  await say("Thank you for your feedback! 👍");
 });
 
-app.action("thumbs_down", async ({ ack, say, action }) => {
+app.action("thumbs_down", async ({ ack, action, body, client }) => {
   await ack();
 
-  if ("value" in action) {
-    // value is thumbs_up-[type]-[interactionId
-    const [feedbackType, interactionType, interactionId] = (
-      action.value as string
-    ).split("-");
-
-    if (interactionType === "app_mention") {
-      await logReaction(interactionId, feedbackType);
-    }
+  if (action.type === "button") {
+    handleFeedback(action, body, client);
   }
-
-  await say("Thank you for your feedback!");
 });
 
 // just in case we can't render with blocks
@@ -253,7 +261,6 @@ const convertToText = (content: AnswerQuestionFunctionArgs[]) => {
 
 const convertToBlocks = (
   content: AnswerQuestionFunctionArgs[],
-  interactionType: InteractionType,
   interactionId: string
 ) => {
   // Constructing Slack message blocks
@@ -311,7 +318,7 @@ const convertToBlocks = (
             text: "Yes 👍",
             emoji: true,
           },
-          value: `thumbs_up-${interactionType}-${interactionId}`,
+          value: `thumbs_up-${interactionId}`,
           action_id: "thumbs_up",
         },
         {
@@ -321,7 +328,7 @@ const convertToBlocks = (
             text: "No 👎",
             emoji: true,
           },
-          value: `thumbs_down-${interactionType}-${interactionId}`,
+          value: `thumbs_down-${interactionId}`,
           action_id: "thumbs_down",
         },
       ],
