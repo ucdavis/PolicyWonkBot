@@ -97,7 +97,7 @@ app.event("app_mention", async ({ event, client }) => {
     const response = await getResponse(filteredPayloadText, modelName);
 
     // convert to slack blocks
-    const blocks = convertToBlocks(response, interactionId);
+    const blocks = convertToBlocks(response, "app_mention", interactionId);
 
     // Post another message in the thread after the API call
     await client.chat.postMessage({
@@ -167,7 +167,7 @@ const handleSlashCommand = async ({
     // console.log('response', response);
 
     // convert to slack blocks
-    const blocks = convertToBlocks(response, interactionId);
+    const blocks = convertToBlocks(response, "slash_command", interactionId);
 
     // update the message with the response
     await respond({
@@ -206,9 +206,14 @@ app.action("thumbs_up", async ({ ack, say, action }) => {
   await ack();
 
   if ("value" in action) {
-    // value is thumbs_up-interactionId
-    const [feedbackType, interactionId] = (action.value as string).split("-");
-    await logReaction(interactionId, feedbackType);
+    // value is thumbs_up-[type]-[interactionId
+    const [feedbackType, interactionType, interactionId] = (
+      action.value as string
+    ).split("-");
+
+    if (interactionType === "app_mention") {
+      await logReaction(interactionId, feedbackType);
+    }
   }
 
   await say("Thank you for your feedback! 👍");
@@ -218,9 +223,14 @@ app.action("thumbs_down", async ({ ack, say, action }) => {
   await ack();
 
   if ("value" in action) {
-    // value is thumbs_up-interactionId
-    const [feedbackType, interactionId] = (action.value as string).split("-");
-    await logReaction(interactionId, feedbackType);
+    // value is thumbs_up-[type]-[interactionId
+    const [feedbackType, interactionType, interactionId] = (
+      action.value as string
+    ).split("-");
+
+    if (interactionType === "app_mention") {
+      await logReaction(interactionId, feedbackType);
+    }
   }
 
   await say("Thank you for your feedback!");
@@ -243,6 +253,7 @@ const convertToText = (content: AnswerQuestionFunctionArgs[]) => {
 
 const convertToBlocks = (
   content: AnswerQuestionFunctionArgs[],
+  interactionType: InteractionType,
   interactionId: string
 ) => {
   // Constructing Slack message blocks
@@ -300,7 +311,7 @@ const convertToBlocks = (
             text: "Yes 👍",
             emoji: true,
           },
-          value: `thumbs_up-${interactionId}`,
+          value: `thumbs_up-${interactionType}-${interactionId}`,
           action_id: "thumbs_up",
         },
         {
@@ -310,7 +321,7 @@ const convertToBlocks = (
             text: "No 👎",
             emoji: true,
           },
-          value: `thumbs_down-${interactionId}`,
+          value: `thumbs_down-${interactionType}-${interactionId}`,
           action_id: "thumbs_down",
         },
       ],
@@ -489,6 +500,8 @@ export interface MessageMetadata {
   team_id: string;
   channel_id: string;
   timestamp: Date;
-  interaction_type: "app_mention" | "slash_command";
+  interaction_type: InteractionType;
   llm_model: string;
 }
+
+type InteractionType = "app_mention" | "slash_command";
