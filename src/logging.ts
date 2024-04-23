@@ -1,6 +1,6 @@
 import { Client, ClientOptions } from "@elastic/elasticsearch";
 import dotenv from "dotenv";
-import { AnswerQuestionFunctionArgs, MessageMetadata } from "./app";
+import { AnswerQuestionFunctionArgs, MessageMetadata } from "./app_llm";
 
 dotenv.config();
 
